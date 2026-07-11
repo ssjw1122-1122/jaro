@@ -3,6 +3,7 @@ import datetime
 import streamlit as st
 from sqlalchemy import create_engine, text
 
+@st.cache_resource
 def get_engine():
     db_url = st.secrets["secrets"]["DB_URL"] if "secrets" in st.secrets else st.secrets["DB_URL"]
     return create_engine(db_url)

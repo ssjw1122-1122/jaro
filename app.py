@@ -212,7 +212,8 @@ def render_dashboard():
         yaxis_title='체중 (kg)',
         hovermode='x unified',
         template='plotly_white',
-        legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99)
+        legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99),
+        xaxis=dict(fixedrange=True)
     )
     
     if view_type == "최근 30일 (Daily)" or view_type == "최근 10주 (Weekly)":
@@ -223,9 +224,9 @@ def render_dashboard():
         if y_min == y_max:
             y_min -= 5
             y_max += 5
-        fig.update_yaxes(range=[y_min, y_max])
+        fig.update_yaxes(range=[y_min, y_max], fixedrange=True)
     else:
-        fig.update_yaxes(range=[80, 115])
+        fig.update_yaxes(range=[80, 115], fixedrange=True)
         
     st.plotly_chart(fig, width='stretch', config={'displayModeBar': False})
     
@@ -261,7 +262,9 @@ def render_dashboard():
                     hovermode='x unified',
                     template='plotly_white',
                     height=345,
-                    margin=dict(t=25, b=10)
+                    margin=dict(t=25, b=10),
+                    xaxis=dict(fixedrange=True),
+                    yaxis=dict(fixedrange=True)
                 )
                 st.plotly_chart(fig_sub, width='stretch', config={'displayModeBar': False})
 
@@ -361,8 +364,8 @@ def render_target_management():
     )
     
     fig_pace.update_layout(
-        xaxis=dict(range=[0, 100], showticklabels=False, showgrid=False, zeroline=False),
-        yaxis=dict(showticklabels=False),
+        xaxis=dict(range=[0, 100], showticklabels=False, showgrid=False, zeroline=False, fixedrange=True),
+        yaxis=dict(showticklabels=False, fixedrange=True),
         height=70, margin=dict(l=0, r=0, t=20, b=0),
         template='plotly_white',
         plot_bgcolor='rgba(0,0,0,0)'

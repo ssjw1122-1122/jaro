@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text
 @st.cache_resource
 def get_engine():
     db_url = st.secrets["secrets"]["DB_URL"] if "secrets" in st.secrets else st.secrets["DB_URL"]
-    return create_engine(db_url)
+    return create_engine(db_url, pool_pre_ping=True, pool_recycle=300)
 
 def init_db():
     engine = get_engine()

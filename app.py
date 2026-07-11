@@ -16,9 +16,9 @@ def check_password():
     st.markdown("### 🔒 보안 접근")
     
     def password_entered():
-        if st.session_state["pwd_input"] == "1122":
+        if st.session_state.get("pwd_input", "") == "1122":
             st.session_state["password_correct"] = True
-            del st.session_state["pwd_input"]  # 입력값 지우기
+            # 입력값은 Streamlit이 화면 전환 시 알아서 지우므로 수동으로 지우지 않습니다.
         else:
             st.session_state["password_correct"] = False
 

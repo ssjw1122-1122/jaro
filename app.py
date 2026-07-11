@@ -5,32 +5,33 @@ import plotly.graph_objects as go
 from sklearn.linear_model import LinearRegression
 import database
 import datetime
+import os
 
 # 페이지 설정
 st.set_page_config(page_title="체중 관리 대시보드", page_icon="📉", layout="wide")
 
-def check_password():
+def check_password(key_suffix=""):
+    # 윈도우 환경(로컬)에서는 비밀번호 확인을 생략합니다.
+    if os.name == 'nt':
+        return True
+
     if st.session_state.get("password_correct", False):
         return True
 
     st.markdown("### 🔒 보안 접근")
     
     def password_entered():
-        if st.session_state.get("pwd_input", "") == "1122":
+        if st.session_state.get(f"pwd_input_{key_suffix}", "") == "1122":
             st.session_state["password_correct"] = True
-            # 입력값은 Streamlit이 화면 전환 시 알아서 지우므로 수동으로 지우지 않습니다.
         else:
             st.session_state["password_correct"] = False
 
-    st.text_input("비밀번호를 입력하세요 (엔터)", type="password", key="pwd_input", on_change=password_entered)
+    st.text_input("비밀번호를 입력하세요 (엔터)", type="password", key=f"pwd_input_{key_suffix}", on_change=password_entered)
     
     if "password_correct" in st.session_state and not st.session_state["password_correct"]:
         st.error("비밀번호가 일치하지 않습니다.")
         
     return False
-
-if not check_password():
-    st.stop()
 
 
 # 상단 툴바(Deploy 등) 숨기기 및 상단 빈 공간(padding) 제거
@@ -425,6 +426,9 @@ def render_target_management():
         st.write("아직 종료된 과거 기수가 없습니다.")
 
 def render_data_input():
+    if not check_password("tab3"):
+        return
+        
     st.subheader("데이터 입력 및 관리")
     
     st.markdown("#### 1. CSV 파일 병합")
@@ -504,7 +508,9 @@ def render_data_input():
                 st.warning("입력된 체중 데이터가 없습니다.")
 
 def render_side_effect_record():
-    
+    if not check_password("tab4"):
+        return
+        
     col1, col2, col3 = st.columns([3, 7, 2], vertical_alignment="bottom")
     with col1:
         note_date = st.date_input("날짜", value=datetime.date.today(), label_visibility="collapsed")

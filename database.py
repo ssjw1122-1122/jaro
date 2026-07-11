@@ -1,13 +1,38 @@
 import pandas as pd
 import datetime
+import time
 import streamlit as st
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
+from functools import wraps
+
+def retry_on_operational_error(max_retries=3, delay=1.5):
+    """
+    Catch OperationalError (like DB connection dropped or cold start),
+    wait for `delay` seconds, and retry.
+    Only delays when an error occurs.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            retries = 0
+            while True:
+                try:
+                    return func(*args, **kwargs)
+                except OperationalError as e:
+                    retries += 1
+                    if retries > max_retries:
+                        raise e
+                    time.sleep(delay)
+        return wrapper
+    return decorator
 
 @st.cache_resource
 def get_engine():
     db_url = st.secrets["secrets"]["DB_URL"] if "secrets" in st.secrets else st.secrets["DB_URL"]
     return create_engine(db_url, pool_pre_ping=True, pool_recycle=300)
 
+@retry_on_operational_error()
 def init_db():
     engine = get_engine()
     with engine.begin() as conn:
@@ -40,6 +65,7 @@ def init_db():
             )
         '''))
 
+@retry_on_operational_error()
 def process_and_upload_csv(file_path_or_buffer):
     """
     Reads the CSV, filters for the earliest record per day (morning),
@@ -99,6 +125,7 @@ def process_and_upload_csv(file_path_or_buffer):
                 'source': row['source']
             })
 
+@retry_on_operational_error()
 def upsert_manual_entry(date_str, weight):
     engine = get_engine()
     with engine.begin() as conn:
@@ -118,6 +145,7 @@ def upsert_manual_entry(date_str, weight):
         
     return True, "저장되었습니다."
 
+@retry_on_operational_error()
 def get_interpolated_data():
     """
     Fetches all daily metrics, creates a complete date range, 
@@ -150,23 +178,27 @@ def get_interpolated_data():
     
     return df
 
+@retry_on_operational_error()
 def save_side_effect(date_str, notes):
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(text('INSERT INTO side_effects (date, notes) VALUES (:date, :notes)'), 
                      {'date': date_str, 'notes': notes})
 
+@retry_on_operational_error()
 def get_all_side_effects():
     engine = get_engine()
     query = "SELECT id, date, notes FROM side_effects ORDER BY id DESC"
     df = pd.read_sql_query(query, engine)
     return df
 
+@retry_on_operational_error()
 def delete_side_effect(record_id):
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(text('DELETE FROM side_effects WHERE id = :id'), {'id': int(record_id)})
 
+@retry_on_operational_error()
 def get_missing_dates():
     """
     Returns a list of date strings (YYYY-MM-DD) that have no record
@@ -199,6 +231,7 @@ def get_missing_dates():
     
     return missing
 
+@retry_on_operational_error()
 def skip_date(date_str):
     """Mark a date as skipped (no measurement taken)."""
     engine = get_engine()
@@ -208,6 +241,7 @@ def skip_date(date_str):
             ON CONFLICT (date) DO NOTHING
         '''), {'date': date_str})
 
+@retry_on_operational_error()
 def get_skipped_dates():
     """Returns a set of skipped date strings."""
     engine = get_engine()
@@ -216,6 +250,7 @@ def get_skipped_dates():
         dates = set(r[0] for r in result.fetchall())
     return dates
 
+@retry_on_operational_error()
 def upsert_manual_entries(entries):
     """
     Bulk upsert manual entries. entries is a list of (date_str, weight) tuples.

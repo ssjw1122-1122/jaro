@@ -9,6 +9,30 @@ import datetime
 # 페이지 설정
 st.set_page_config(page_title="체중 관리 대시보드", page_icon="📉", layout="wide")
 
+def check_password():
+    if st.session_state.get("password_correct", False):
+        return True
+
+    st.markdown("### 🔒 보안 접근")
+    
+    def password_entered():
+        if st.session_state["pwd_input"] == "1122":
+            st.session_state["password_correct"] = True
+            del st.session_state["pwd_input"]  # 입력값 지우기
+        else:
+            st.session_state["password_correct"] = False
+
+    st.text_input("비밀번호를 입력하세요 (엔터)", type="password", key="pwd_input", on_change=password_entered)
+    
+    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+        st.error("비밀번호가 일치하지 않습니다.")
+        
+    return False
+
+if not check_password():
+    st.stop()
+
+
 # 상단 툴바(Deploy 등) 숨기기 및 상단 빈 공간(padding) 제거
 st.markdown("""
     <style>

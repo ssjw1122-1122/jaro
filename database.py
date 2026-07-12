@@ -318,7 +318,8 @@ def init_injection_data():
     engine = get_engine()
     with engine.begin() as conn:
         result = conn.execute(text('SELECT COUNT(*) FROM injection_boxes'))
-        count = result.scalar()
+        row = result.fetchone()
+        count = row[0] if row else 0
         if count == 0:
             for start_date, dose in _INITIAL_INJECTION_HISTORY:
                 price = DOSE_PRICES[dose]

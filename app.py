@@ -11,28 +11,8 @@ import os
 # 페이지 설정
 st.set_page_config(page_title="체중 관리 대시보드", page_icon="📉", layout="wide")
 
-def check_password(key_suffix=""):
-    # 윈도우 환경(로컬)에서는 비밀번호 확인을 생략합니다.
-    if os.name == 'nt':
-        return True
-
-    if st.session_state.get("password_correct", False):
-        return True
-
-    st.markdown("### 🔒 보안 접근")
-    
-    def password_entered():
-        if st.session_state.get(f"pwd_input_{key_suffix}", "") == "1122":
-            st.session_state["password_correct"] = True
-        else:
-            st.session_state["password_correct"] = False
-
-    st.text_input("비밀번호를 입력하세요 (엔터)", type="password", key=f"pwd_input_{key_suffix}", on_change=password_entered)
-    
-    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-        st.error("비밀번호가 일치하지 않습니다.")
-        
-    return False
+# 윈도우 환경(로컬)이 아니면(리눅스/배포 환경 등) 읽기 전용으로 설정
+is_readonly = (os.name != 'nt')
 
 
 # 상단 툴바(Deploy 등) 숨기기 및 상단 빈 공간(padding) 제거
@@ -428,8 +408,6 @@ def render_target_management():
         st.write("아직 종료된 과거 기수가 없습니다.")
 
 def render_data_input():
-    if not check_password("tab3"):
-        return
         
     st.subheader("데이터 입력 및 관리")
     
@@ -438,7 +416,7 @@ def render_data_input():
     uploaded_file = st.file_uploader("CSV 파일 업로드", type=['csv'])
     
     if uploaded_file is not None:
-        if st.button("CSV 데이터 병합하기"):
+        if st.button("CSV 데이터 병합하기", disabled=is_readonly):
             with st.spinner("데이터 처리 중..."):
                 try:
                     database.process_and_upload_csv(uploaded_file)
@@ -472,7 +450,7 @@ def render_data_input():
                     placeholder="체중(kg)"
                 )
             with col_btn:
-                if st.button("저장", key=f"save_{date_str}", width='stretch'):
+                if st.button("저장", key=f"save_{date_str}", width='stretch', disabled=is_readonly):
                     val = st.session_state.get(f"w_{date_str}")
                     if val is not None:
                         success, msg = database.upsert_manual_entry(date_str, val)
@@ -484,14 +462,14 @@ def render_data_input():
                     else:
                         st.toast("⚠️ 체중을 입력하세요.")
             with col_skip:
-                if st.button("측정누락", key=f"skip_{date_str}", width='stretch'):
+                if st.button("측정누락", key=f"skip_{date_str}", width='stretch', disabled=is_readonly):
                     database.skip_date(date_str)
                     st.toast(f"{date_str} 측정누락 처리!")
                     st.rerun()
         
         st.divider()
         
-        if st.button("💾 입력된 항목 일괄 저장", type="primary", width='stretch'):
+        if st.button("💾 입력된 항목 일괄 저장", type="primary", width='stretch', disabled=is_readonly):
             entries = []
             for date_str in missing_dates:
                 val = st.session_state.get(f"w_{date_str}")
@@ -510,8 +488,6 @@ def render_data_input():
                 st.warning("입력된 체중 데이터가 없습니다.")
 
 def render_side_effect_record():
-    if not check_password("tab4"):
-        return
         
     col1, col2, col3 = st.columns([3, 7, 2], vertical_alignment="bottom")
     with col1:
@@ -519,7 +495,7 @@ def render_side_effect_record():
     with col2:
         notes = st.text_input("내용", placeholder="", label_visibility="collapsed")
     with col3:
-        if st.button("등록", type="primary", width='stretch'):
+        if st.button("등록", type="primary", width='stretch', disabled=is_readonly):
             if notes.strip():
                 database.save_side_effect(note_date.strftime('%Y-%m-%d'), notes)
                 st.rerun()
@@ -552,7 +528,7 @@ def render_side_effect_record():
         
         for idx, row in se_df.iterrows():
             c1, c2 = st.columns([1, 15], vertical_alignment="center")
-            if c1.button("❌", key=f"del_{row['id']}", width='stretch'):
+            if c1.button("❌", key=f"del_{row['id']}", width='stretch', disabled=is_readonly):
                 database.delete_side_effect(row['id'])
                 st.rerun()
             c2.markdown(f"<span class='record-line'>🗓️ <b>{row['date']}</b> &nbsp;|&nbsp; {row['notes']}</span>", unsafe_allow_html=True)
@@ -748,12 +724,12 @@ def render_injection_stats():
                                 format_func=lambda x: f"{x:.1f}mg (₩{database.DOSE_PRICES[x]:,})",
                                 key="new_box_dose")
     with reg_col2:
-        if st.button(f"📦 새 박스 등록 ({next_box_start}~)", key="add_box", width='stretch'):
+        if st.button(f"📦 새 박스 등록 ({next_box_start}~)", key="add_box", width='stretch', disabled=is_readonly):
             database.add_injection_box(next_box_start, new_dose)
             st.toast(f"✅ Box #{len(boxes_df)+1} ({new_dose}mg) 등록 완료!")
             st.rerun()
     with reg_col3:
-        if st.button("🗑️ 마지막 박스 삭제", key="delete_box_btn", width='stretch'):
+        if st.button("🗑️ 마지막 박스 삭제", key="delete_box_btn", width='stretch', disabled=is_readonly):
             if database.delete_last_injection_box():
                 st.toast("🗑️ 마지막 박스가 삭제되었습니다.")
                 st.rerun()

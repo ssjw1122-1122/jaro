@@ -560,9 +560,7 @@ def render_side_effect_record():
         st.info("아직 기록된 내용이 없습니다.")
 
 def render_injection_stats():
-    if not check_password("tab5"):
-        return
-
+    # 비번 없이 바로 표시 (잠금 해제)
     # ── 데이터 준비 ──
     boxes_df = database.get_all_injection_boxes()
     if boxes_df.empty:

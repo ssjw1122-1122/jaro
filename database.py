@@ -6,6 +6,14 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from functools import wraps
 
+# 마운자로 용량별 박스(4펜) 가격 (원)
+DOSE_PRICES = {
+    2.5: 305_000,
+    5.0: 405_000,
+    7.5: 560_000,
+    10.0: 560_000,
+}
+
 def retry_on_operational_error(max_retries=3, delay=1.5):
     """
     Catch OperationalError (like DB connection dropped or cold start),
@@ -62,6 +70,17 @@ def init_db():
         conn.execute(text('''
             CREATE TABLE IF NOT EXISTS skipped_dates (
                 date TEXT PRIMARY KEY
+            )
+        '''))
+        
+        # Create injection_boxes table (마운자로 투여 박스 기록)
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS injection_boxes (
+                id SERIAL PRIMARY KEY,
+                start_date TEXT NOT NULL,
+                dose_mg REAL NOT NULL,
+                box_price INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         '''))
 
@@ -277,3 +296,86 @@ def upsert_manual_entries(entries):
             '''), {'date': date_str, 'weight': float(weight)})
             saved += 1
     return saved, skipped
+
+# ─── 투여 박스 기록 관련 함수 ───
+
+# 기존 투여 이력 (앱 최초 실행 시 자동 삽입)
+_INITIAL_INJECTION_HISTORY = [
+    ('2025-12-20', 2.5),
+    ('2026-01-17', 5.0),
+    ('2026-02-14', 5.0),
+    ('2026-03-14', 5.0),
+    ('2026-04-11', 5.0),
+    ('2026-05-09', 7.5),
+    ('2026-06-06', 7.5),
+    ('2026-07-04', 7.5),
+    ('2026-08-01', 7.5),
+]
+
+@retry_on_operational_error()
+def init_injection_data():
+    """테이블이 비어있으면 기존 투여 이력을 자동 삽입합니다."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        result = conn.execute(text('SELECT COUNT(*) FROM injection_boxes'))
+        count = result.scalar()
+        if count == 0:
+            for start_date, dose in _INITIAL_INJECTION_HISTORY:
+                price = DOSE_PRICES[dose]
+                conn.execute(text('''
+                    INSERT INTO injection_boxes (start_date, dose_mg, box_price)
+                    VALUES (:start_date, :dose_mg, :box_price)
+                '''), {'start_date': start_date, 'dose_mg': dose, 'box_price': price})
+
+@retry_on_operational_error()
+def add_injection_box(start_date, dose_mg):
+    """새 박스를 등록합니다. 가격은 DOSE_PRICES에서 자동 매핑."""
+    price = DOSE_PRICES[dose_mg]
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text('''
+            INSERT INTO injection_boxes (start_date, dose_mg, box_price)
+            VALUES (:start_date, :dose_mg, :box_price)
+        '''), {'start_date': start_date, 'dose_mg': dose_mg, 'box_price': price})
+
+@retry_on_operational_error()
+def delete_last_injection_box():
+    """가장 마지막에 등록된 박스를 삭제합니다."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        result = conn.execute(text('SELECT id FROM injection_boxes ORDER BY start_date DESC, id DESC LIMIT 1'))
+        row = result.fetchone()
+        if row:
+            conn.execute(text('DELETE FROM injection_boxes WHERE id = :id'), {'id': row[0]})
+            return True
+    return False
+
+@retry_on_operational_error()
+def get_all_injection_boxes():
+    """전체 박스 목록을 DataFrame으로 반환합니다."""
+    engine = get_engine()
+    query = "SELECT id, start_date, dose_mg, box_price FROM injection_boxes ORDER BY start_date ASC"
+    df = pd.read_sql_query(query, engine)
+    return df
+
+def get_all_injection_dates(boxes_df=None):
+    """
+    모든 투여 날짜 + 용량 리스트를 반환합니다.
+    각 박스의 start_date로부터 4주(4회 토요일)를 파생합니다.
+    Returns: list of dicts [{'date': datetime, 'dose_mg': float, 'box_id': int}, ...]
+    """
+    if boxes_df is None:
+        boxes_df = get_all_injection_boxes()
+    
+    injections = []
+    for _, box in boxes_df.iterrows():
+        start = pd.to_datetime(box['start_date'])
+        for week in range(4):
+            inj_date = start + pd.Timedelta(weeks=week)
+            injections.append({
+                'date': inj_date,
+                'dose_mg': box['dose_mg'],
+                'box_id': box['id'],
+                'box_price': box['box_price'],
+            })
+    return injections
